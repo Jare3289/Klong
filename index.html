@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ค้นคำเอกโท - ระบบวิเคราะห์ฉันทลักษณ์</title>
+    
+    <!-- 1. Import Fonts: Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    
+    <!-- 2. Import Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- 3. Import React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 4. Import Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background-color: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-white text-slate-800 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        // --- ICON COMPONENTS (Inline SVGs to avoid build steps) ---
+        const Icon = ({ path, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Search = (props) => <Icon {...props} path={<><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></>} />;
+        const FileText = (props) => <Icon {...props} path={<><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></>} />;
+        const ListFilter = (props) => <Icon {...props} path={<><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></>} />;
+        const Download = (props) => <Icon {...props} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></>} />;
+        const Layout = (props) => <Icon {...props} path={<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></>} />;
+        const Sparkles = (props) => <Icon {...props} path={<><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></>} />;
+        const Edit3 = (props) => <Icon {...props} path={<><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></>} />;
+        const ArrowRight = (props) => <Icon {...props} path={<><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></>} />;
+        const TableIcon = (props) => <Icon {...props} path={<><path d="M9 3H5a2 2 0 0 0-2 2v4h6V3z"></path><path d="M9 21H5a2 2 0 0 1-2-2v-4h6v6z"></path><path d="M21 3h-4v6h6V5a2 2 0 0 0-2-2z"></path><path d="M21 21h-4v-6h6v4a2 2 0 0 1-2 2z"></path><path d="M9 3v18"></path><path d="M15 3v18"></path></>} />;
+        const MapPin = (props) => <Icon {...props} path={<><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></>} />;
+
+
+        // --- MAIN APP COMPONENT ---
+        const App = () => {
+            const [inputText, setInputText] = useState(
+                "เสียงลือเสียงเล่าอ้าง     อันใด พี่เอย\nเสียงย่อมยอยศใคร     ทั่วหล้า\nสองเขือพี่หลับใหล     ลืมตื่น ฤาพี่\nสองพี่คิดเองอ้า     อย่าได้ถามเผือ"
+            );
+            const [analyzedData, setAnalyzedData] = useState([]);
+            const [segmenterSupported, setSegmenterSupported] = useState(false);
+            const [filterMode, setFilterMode] = useState('all');
+            const [isProcessing, setIsProcessing] = useState(false);
+
+            const MAI_EK = '\u0E48';
+            const MAI_THO = '\u0E49';
+
+            useEffect(() => {
+                if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+                    setSegmenterSupported(true);
+                }
+            }, []);
+
+            const cleanInputText = (text) => {
+                return text.replace(/[^\u0E01-\u0E3A\u0E40-\u0E4D\u0E4Ea-zA-Z\s]/g, '');
+            };
+
+            const isDeadWord = (word) => {
+                if (!word) return false;
+                if (word.includes(MAI_EK) || word.includes(MAI_THO)) return false;
+
+                const chars = [...word];
+                const lastChar = chars[chars.length - 1];
+                const maeKok = ['ก', 'ข', 'ค', 'ฆ'];
+                const maeKop = ['บ', 'ป', 'พ', 'ฟ', 'ภ'];
+                const maeKot = ['จ', 'ช', 'ซ', 'ฌ', 'ฎ', 'ฏ', 'ฐ', 'ฑ', 'ฒ', 'ด', 'ต', 'ถ', 'ท', 'ธ', 'ศ', 'ษ', 'ส'];
+                
+                if ([...maeKok, ...maeKop, ...maeKot].includes(lastChar)) return true;
+                const shortVowels = ['ะ', 'ิ', 'ึ', 'ุ']; 
+                if (shortVowels.includes(lastChar)) return true;
+                
+                return false;
+            };
+
+            const handleCleanAndAlign = () => {
+                const cleanedText = cleanInputText(inputText);
+                const rawLines = cleanedText.split('\n').map(l => l.trim()).filter(l => l);
+                
+                let maxFirstVakLength = 0;
+                const splitLinesData = rawLines.map(line => {
+                    const parts = line.split(/\s{2,}|\t/);
+                    if (parts.length > 0) {
+                        if (parts[0].length > maxFirstVakLength) maxFirstVakLength = parts[0].length;
+                    }
+                    return parts;
+                });
+
+                const minPadding = 6; 
+                const targetLength = maxFirstVakLength + minPadding;
+                let formattedResult = "";
+
+                splitLinesData.forEach((parts, index) => {
+                    let formattedLine = "";
+                    if (parts.length >= 2) {
+                        const firstPart = parts[0];
+                        const secondPart = parts.slice(1).join(' ').trim();
+                        const paddingNeeded = Math.max(minPadding, targetLength - firstPart.length);
+                        const padding = ' '.repeat(paddingNeeded);
+                        formattedLine = `${firstPart}${padding}${secondPart}`;
+                    } else {
+                        formattedLine = parts[0];
+                    }
+
+                    formattedResult += formattedLine + "\n";
+                    if ((index + 1) % 4 === 0 && index !== splitLinesData.length - 1) {
+                        formattedResult += "\n";
+                    }
+                });
+
+                setInputText(formattedResult);
+                return formattedResult;
+            };
+
+            const performAnalysis = useCallback((textToAnalyze) => {
+                setIsProcessing(true);
+                setTimeout(() => {
+                    const lines = textToAnalyze.split('\n');
+                    const results = [];
+                    let activeLineCount = 0;
+
+                    lines.forEach((line) => {
+                        if (!line.trim()) return;
+
+                        activeLineCount++; 
+                        const botIndex = Math.ceil(activeLineCount / 4);
+                        const batIndex = (activeLineCount - 1) % 4 + 1;
+                        const vaks = line.trim().split(/\s{2,}|\t/);
+                        
+                        vaks.forEach((vakText, vIdx) => {
+                            if (!vakText.trim()) return;
+                            
+                            let tokens = [];
+                            if (segmenterSupported) {
+                                const segmenter = new Intl.Segmenter('th', { granularity: 'word' });
+                                const segments = segmenter.segment(vakText);
+                                for (const segment of segments) {
+                                    if (segment.isWordLike) tokens.push({ word: segment.segment, index: segment.index });
+                                }
+                            } else {
+                                tokens = vakText.replace(/\s+/g, ' ').trim().split(' ').map((t, i) => ({ word: t, index: i }));
+                            }
+
+                            for (let i = 0; i < tokens.length - 1; i++) {
+                                const word1 = tokens[i].word;
+                                const word2 = tokens[i+1].word;
+                                const hasEk1 = word1.includes(MAI_EK);
+                                const isDead1 = isDeadWord(word1);
+                                const hasTho2 = word2.includes(MAI_THO);
+
+                                let type = 'normal';
+                                if (hasEk1 && hasTho2) type = 'ek-tho';
+                                else if (isDead1 && hasTho2) type = 'tai-tho';
+
+                                results.push({
+                                    id: `b${botIndex}-l${batIndex}-v${vIdx}-p${i}-${Date.now()}-${Math.random()}`,
+                                    vakText: vakText.trim(),
+                                    pair: word1 + word2,
+                                    first: word1,
+                                    second: word2,
+                                    type: type,
+                                    isMatch: type !== 'normal'
+                                });
+                            }
+                        });
+                    });
+                    setAnalyzedData(results);
+                    setIsProcessing(false);
+                }, 400);
+            }, [segmenterSupported]);
+
+            const handleFullProcess = () => {
+                const alignedText = handleCleanAndAlign();
+                performAnalysis(alignedText);
+            };
+
+            const handleReset = () => {
+                setInputText("");
+                setAnalyzedData([]);
+            };
+
+            const handleEdit = (id, field, value) => {
+                setAnalyzedData(prevData => prevData.map(item => {
+                    if (item.id === id) {
+                        const updatedItem = { ...item, [field]: value };
+                        if (field === 'first') updatedItem.pair = value + item.second;
+                        else if (field === 'second') updatedItem.pair = item.first + value;
+                        if (field === 'type') updatedItem.isMatch = value !== 'normal';
+                        return updatedItem;
+                    }
+                    return item;
+                }));
+            };
+
+            const handleExport = () => {
+                if (analyzedData.length === 0) return;
+                const dataToExport = displayData;
+                const BOM = "\uFEFF";
+                const headers = "ที่,คำที่พบ (Pair),คำแรก (First),คำหลัง (Second),วรรคเต็ม (Full Context),ประเภท (Type)\n";
+                const rows = dataToExport.map((item, idx) => {
+                    const pair = `"${item.pair.replace(/"/g, '""')}"`;
+                    const first = `"${item.first.replace(/"/g, '""')}"`;
+                    const second = `"${item.second.replace(/"/g, '""')}"`;
+                    const context = `"${item.vakText.replace(/"/g, '""')}"`;
+                    let typeLabel = "ทั่วไป";
+                    if (item.type === 'ek-tho') typeLabel = "เอก-โท";
+                    if (item.type === 'tai-tho') typeLabel = "ตาย-โท";
+                    return `${idx + 1},${pair},${first},${second},${context},${typeLabel}`;
+                }).join("\n");
+
+                const csvContent = BOM + headers + rows;
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", "ek_tho_analysis_result.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const displayData = analyzedData.filter(d => {
+                if (filterMode === 'all') return true;
+                if (filterMode === 'ek-tho') return d.type === 'ek-tho';
+                if (filterMode === 'tai-tho') return d.type === 'tai-tho';
+                if (filterMode === 'matches') return d.isMatch; 
+                return true;
+            });
+
+            return (
+                <div className="min-h-screen bg-white text-slate-800 font-sans p-6 md:p-12">
+                    <div className="max-w-[1400px] mx-auto font-['Prompt']">
+                        {/* Header */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-slate-100 pb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-orange-500 p-3 rounded-xl shadow-lg shadow-orange-500/20">
+                                    <Search className="w-8 h-8 text-white" />
+                                </div>
+                                <div>
+                                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">ค้นคำเอกโท</h1>
+                                    <p className="text-slate-400 text-sm mt-1">ระบบวิเคราะห์ฉันทลักษณ์ (Single File Edition)</p>
+                                </div>
+                            </div>
+                            <div className="px-4 py-2 rounded-full text-xs font-bold border bg-green-50 text-green-700 border-green-100">
+                                {segmenterSupported ? 'Intl.Segmenter Active' : 'Basic Splitter'}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 min-h-[600px]">
+                            {/* Input Panel */}
+                            <div className="lg:col-span-4 flex flex-col gap-4">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                        <FileText className="w-4 h-4 text-orange-500" />
+                                        บทประพันธ์ต้นฉบับ
+                                    </label>
+                                    <button onClick={handleReset} className="text-xs text-slate-400 hover:text-red-500 transition-colors">
+                                        ล้างข้อมูล
+                                    </button>
+                                </div>
+
+                                <div className="relative flex-1 bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden group">
+                                    <textarea
+                                        value={inputText}
+                                        onChange={(e) => setInputText(e.target.value)}
+                                        className="w-full h-full p-6 resize-none outline-none text-lg text-slate-700 leading-relaxed bg-transparent font-mono whitespace-pre overflow-x-auto"
+                                        placeholder="วางโคลงสี่สุภาพที่นี่..."
+                                        spellCheck="false"
+                                    ></textarea>
+                                </div>
+
+                                <button
+                                    onClick={handleFullProcess}
+                                    disabled={!inputText.trim() || isProcessing}
+                                    className="w-full py-4 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl font-bold text-lg shadow-xl shadow-orange-500/20 transition-all flex items-center justify-center gap-3"
+                                >
+                                    {isProcessing ? (
+                                        <> <Sparkles className="w-5 h-5 animate-spin" /> กำลังประมวลผล... </>
+                                    ) : (
+                                        <> <Layout className="w-5 h-5" /> จัดระเบียบและวิเคราะห์ </>
+                                    )}
+                                </button>
+                                <p className="text-xs text-slate-400 text-center">
+                                    ระบบจะล้างอักขระ/ฯ &rarr; จัดคอลัมน์ &rarr; วิเคราะห์
+                                </p>
+                            </div>
+
+                            {/* Output Panel */}
+                            <div className="lg:col-span-8 flex flex-col gap-4">
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex justify-between items-end">
+                                        <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                            <ListFilter className="w-4 h-4 text-green-600" />
+                                            ผลการวิเคราะห์
+                                        </label>
+                                        {analyzedData.length > 0 && (
+                                            <button 
+                                                onClick={handleExport}
+                                                className="flex items-center gap-2 text-xs font-bold bg-slate-800 text-white px-4 py-2 rounded-lg transition-all shadow-md hover:bg-slate-700"
+                                            >
+                                                <Download className="w-3.5 h-3.5" />
+                                                Export Excel (CSV)
+                                            </button>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap gap-2">
+                                        <button onClick={() => setFilterMode('all')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${filterMode === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                            ทั้งหมด
+                                        </button>
+                                        <button onClick={() => setFilterMode('matches')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${filterMode === 'matches' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                            พบ {analyzedData.filter(d => d.isMatch).length} คู่
+                                        </button>
+                                        <button onClick={() => setFilterMode('ek-tho')} className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${filterMode === 'ek-tho' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-slate-50 text-slate-400'}`}>
+                                            <div className="w-2 h-2 rounded-full bg-green-500"></div> เอก-โท
+                                        </button>
+                                        <button onClick={() => setFilterMode('tai-tho')} className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${filterMode === 'tai-tho' ? 'bg-orange-100 text-orange-700 border border-orange-200' : 'bg-slate-50 text-slate-400'}`}>
+                                            <div className="w-2 h-2 rounded-full bg-orange-500"></div> ตาย-โท
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-sm">
+                                    <div className="grid grid-cols-12 gap-2 px-4 py-4 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase">
+                                        <div className="col-span-1 text-center">ที่</div>
+                                        <div className="col-span-3">คำที่พบ</div>
+                                        <div className="col-span-2 text-center">แยกคำ</div>
+                                        <div className="col-span-4">วรรคเต็ม (Context)</div>
+                                        <div className="col-span-2 text-center">ประเภท</div>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                        {analyzedData.length === 0 && (
+                                            <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4">
+                                                <TableIcon className="w-16 h-16 opacity-20" />
+                                                <p className="font-light">กดปุ่ม "จัดระเบียบและวิเคราะห์" เพื่อเริ่มทำงาน</p>
+                                            </div>
+                                        )}
+
+                                        {displayData.map((item, idx) => (
+                                            <div key={item.id} className={`grid grid-cols-12 gap-4 items-center px-4 py-4 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors group ${item.type === 'ek-tho' ? 'bg-green-50/40' : item.type === 'tai-tho' ? 'bg-orange-50/40' : ''}`}>
+                                                <div className="col-span-1 flex justify-center">
+                                                    <span className="w-6 h-6 rounded bg-slate-200 text-slate-600 text-xs font-bold flex items-center justify-center">{idx + 1}</span>
+                                                </div>
+                                                <div className="col-span-3 relative">
+                                                    <input type="text" value={item.pair} onChange={(e) => handleEdit(item.id, 'pair', e.target.value)} className="w-full bg-transparent font-bold text-lg text-slate-700 focus:outline-none focus:underline decoration-orange-300 underline-offset-4 pl-1" />
+                                                    <Edit3 className="w-3 h-3 text-slate-300 absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 pointer-events-none" />
+                                                </div>
+                                                <div className="col-span-2 flex items-center gap-1">
+                                                    <input type="text" value={item.first} onChange={(e) => handleEdit(item.id, 'first', e.target.value)} className="w-full bg-slate-100 hover:bg-white border border-transparent focus:border-orange-300 rounded px-1 py-1.5 text-xs text-slate-600 text-center font-medium focus:outline-none transition-all" />
+                                                    <ArrowRight className="w-3 h-3 text-slate-300" />
+                                                    <input type="text" value={item.second} onChange={(e) => handleEdit(item.id, 'second', e.target.value)} className="w-full bg-slate-100 hover:bg-white border border-transparent focus:border-orange-300 rounded px-1 py-1.5 text-xs text-slate-600 text-center font-medium focus:outline-none transition-all" />
+                                                </div>
+                                                <div className="col-span-4">
+                                                    <div className="text-sm text-slate-700 font-medium font-mono bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-full truncate" title={item.vakText}>{item.vakText}</div>
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <select value={item.type} onChange={(e) => handleEdit(item.id, 'type', e.target.value)} className={`w-full text-[10px] font-bold py-1.5 px-1 rounded border focus:outline-none appearance-none cursor-pointer text-center ${item.type === 'ek-tho' ? 'bg-green-100 text-green-700 border-green-200' : item.type === 'tai-tho' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                                                        <option value="normal">ทั่วไป</option>
+                                                        <option value="ek-tho">เอก-โท</option>
+                                                        <option value="tai-tho">ตาย-โท</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
